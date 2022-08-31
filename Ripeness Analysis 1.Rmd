@@ -1,0 +1,354 @@
+---
+title: "Ripeness Analysis 1"
+output: html_notebook
+date: "August 14, 2022"
+author: "BMC"
+---
+```{r}
+install.packages(c("lme4",
+                   "ggplot2",
+                   "lattice",
+                    "ggsignif",
+                   "MASS",
+                      "vcdExtra",
+                      "bbmle",
+                      "MuMIn",
+                      "ggplot2",
+                      "DescTools",
+                      "remotes",
+                      "gridExtra",
+                   "RColorBrewer"))
+```
+
+```{r}
+library(lme4)
+library(ggplot2)
+library(lattice)
+library(ggsignif)
+library(RColorBrewer)
+```
+
+```{r}
+setwd("C:/Users/15707/Desktop/Research/Panama 2022/Data Analysis/Panama 2022")
+ds<-read.csv("Ripeness DS 1.csv")
+ds
+summary(ds)
+head(ds)
+```
+
+```{r}
+#Exploratory Plots
+plot1 <- ggplot(aes(x=AvSug, y=TotEat), data =ds) + geom_point()+facet_wrap(~Sex)
+plot1
+
+
+plot2 <- ggplot(aes(x=AvSug, y=TotEat, color=Sex), data =ds) + geom_point() + geom_point(size = 2, alpha = 0.8) + geom_smooth(method = "lm")
+plot2
+
+plot3 <- ggplot(aes(x=AvSug, y=TotEat), data=ds) + geom_smooth()+facet_wrap(~Sex)
+plot3
+
+plot4 <- ggplot(aes(x=AvSug, y=TotEat, color=BodyCon, size=Sex),data=ds) + geom_point()
+plot4
+
+
+plot5<- plot(ds$TotEat ~ as.factor(ds$Sex),
+     xlab = "Sex", ylab = "Total Eaten")
+
+plot6 <-plot5<- plot(ds$TotEat ~ as.factor(ds$BodyCon),
+     xlab = "Body Condition", ylab = "Total Eaten")
+ # -------
+plot(TotEat ~ AvSug, data = ds, 
+     xlab = 'Average Sugar (% Brix)', ylab = 'Total Eaten (g)')
+
+```
+
+```{r}
+# Linear Models
+lm.sug <-lm(TotEat~AvSug, data=ds)
+summary(lm.sug) # significant
+
+
+lm.sex<-lm(TotEat ~ Sex, data=ds)
+summary(lm.sex) # not Significant
+
+lm.repro<-lm(TotEat ~ Repro, data=ds)
+summary(lm.repro) # is significant for "testicular" but not "pregnant" ..?
+# Not significant overall though
+
+lm.bc<-lm(TotEat ~ BodyCon, data=ds)
+summary(lm.bc) # Not significant 
+
+
+# Need to check assumptions though
+plot(TotEat~AvSug, data = ds)
+par(mfrow = c(2, 2), cex = 1.4)
+plot(lm.sug)
+
+coef(lm.sug)
+summary(lm.sug)$sigma
+
+shapiro.test(ds$TotEat) # total amount eaten is not normally distributed 
+```
+
+```{r}
+# FULL MODEL
+names(ds)
+M1<- lmer(TotEat ~ AvSug + (Sex) + (InitialW) + (Repro) + (FA) + (Night) + (BodyCon)+ (1 | BatName) ,data = ds, REML = TRUE) 
+M1
+anova(M1)
+help(lmer)
+summary(M1)$coefficients
+coeffs <-coef(summary(M1))
+p<-pnorm(abs(coeffs[, "t value"]), lower.tail= FALSE *2)
+cbind(coeffs, "p value"=round(p,3))
+
+
+
+```
+```{r}
+# Sex is not relevant
+M2Sex<- lmer(TotEat ~ AvSug * (Sex) + (1 | BatName) ,
+     data = ds, REML = TRUE)
+anova(M2Sex)
+```
+
+```{r}
+# Reproductive State is not relevant
+M3<- lmer(TotEat ~ AvSug * (Repro) + (1 | BatName) ,
+     data = ds, REML = TRUE)
+anova(M3)
+```
+
+```{r}
+# Body Condition is significant!
+M4<- lmer(TotEat ~ AvSug * (BodyCon) + (1 | BatName) ,
+     data = ds, REML = TRUE)
+anova(M4)
+```
+
+```{r}
+M5<- lmer(TotEat ~ AvSug * (Night) + (1 | BatName) ,
+     data = ds, REML = TRUE)
+anova(M5)
+```
+
+
+
+-----------------------------------------------------------------------------------------------------------------------------
+
+AUGUST 24, 2022
+
+```{r}
+
+ds
+
+tt1<-t.test(TotEat ~ Sex, data=ds) #p-value = 0.41
+
+lm(TotEat ~ Sex, data = ds) #linear model but TotEat doesn't meet normality assumption
+
+kruskal.test(TotEat ~ AvSug, data = ds) # doesn't assume normality ...p-value= 0.03 **
+```
+
+
+
+```{r}
+# going to try to make ripeness categories for average sugar
+head(ds)
+library(dplyr)
+
+unripe <- filter(ds, AvSug <=10)
+unripe
+
+ripe<- filter (ds, AvSug >10 & AvSug <= 25)
+ripe
+
+overripe <- filter(ds, AvSug >=26)
+overripe
+
+# looking at the means 
+moripe<-mean(overripe$TotEat)
+mripe<-mean(ripe$TotEat)
+munripe<-mean(unripe$TotEat)
+
+
+plot7 <-plot(overripe$TotEat ~ as.factor(overripe$Sex),
+     xlab = "Sex", ylab = "Total Eaten")
+
+plot8 <-plot(ripe$TotEat ~ as.factor(ripe$Sex),
+     xlab = "Sex", ylab = "Total Eaten")
+
+
+t.test(ripe$TotEat, overripe$TotEat) # p-value =0.83
+t.test(ripe$TotEat, unripe$TotEat) # p-value = <0.05 **
+```
+
+
+```{r}
+# IS my data normally distributed? (Using workshop #4 ~slide 30)
+
+lm1<-lm(TotEat ~ AvSug, data = ds)
+par(mfrow=c(2,2))
+plot(lm1)
+
+# Plot#1 - Residuals v Fitted ... doesn't really look randomly scattered
+#          Should consider using a GLM or transforiming the variables 
+
+# Plot#2 - Scale Location ... seems to be a pattern but the x axis scale really isnt that big 
+
+# Plot#3 - QQ Norm ... not looking good
+
+# Plot#4 - Residuals v Leverage ...
+
+coef(lm1)
+plot(TotEat ~ AvSug, data = ds)
+abline(lm1)
+hist(residuals(lm1))
+shapiro.test(residuals(lm1)) # damn it... so close to being normally distributed 
+library(e1071)
+skewness(residuals(lm1))
+
+
+# Transformations 
+log1<-log10(ds$AvSug)
+log2<-log10(ds$TotEat)
+
+log1
+log2[is.na(log2) | log2=="-Inf"] = NA
+log2
+ds$TotEat # value #18 is 0.0 and cant be log transformed
+
+log2[is.na(log2) | log2=="Inf"] = NA
+
+lm2<-lm(log2 ~ log1, data=ds, na.rm=TRUE)
+lm2
+plot(lm2)
+
+coef(lm2)
+plot(log2 ~ log1, data=ds)
+hist(residuals(lm2))
+summary(lm2)
+
+# well this didn't really work well sooooo.... moving on
+```
+
+
+
+
+```{r}
+# Using Workshop 7 - Linear and Generalized Mixed Models 
+hist(ds$BodyCon, xlab="Body Condition")
+hist(ds$TotEat, xlab="Total Amount Eaten")
+hist(ds$AvSug)
+plot(ds)
+cor(ds$TotEat, ds$AvSug)
+
+# looking at Z correlation
+# think about the scale of the data... body condition = short scale, TotEat = long sclae?
+# The standard score (more commonly referred to as a z-score) is a very useful statistic because it (a) allows us to calculate the probability of a score occurring within our normal distribution and (b) enables us to compare two scores that are from different normal distributions.
+
+z1<-scale(ds$BodyCon)
+z1
+z2<-scale(ds$TotEat)
+z3<-scale(ds$AvSug)
+
+# Data exploration - slide 47
+
+lm.test1<-lm(z2 ~ z3 , data=ds) # model without random effects
+lm.test1
+lm.test.resid <- rstandard(lm.test1) #calculating the residuls of the model
+
+plotA <-plot(lm.test.resid ~as.factor(ds$Sex))
+abline(0, 0, lty = 2) # looks like sex shouldn't be included in the model bc there isn't obvious residual variance 
+
+
+plotB <- plot(lm.test.resid ~as.factor(ds$BodyCon))
+abline(0, 0, lty = 2) # but body conditino should be included in the model
+
+plotA <-plot(lm.test.resid ~as.factor(ds$Repro))
+abline(0, 0, lty = 2) #maybe reproductive state should be included 
+
+
+
+
+lmer(z2 ~ z3 + (1 | BatName) +(1 +z3 | Sex) +(1 +z3| BodyCon) + (1 +z3 | Repro),data = ds, REML = TRUE) #slopes of the relationship between Amt eaten and avg. sugar  vary by sex, body condition and reproductive state
+
+# Compare this model to other alternative models 
+
+M0<-lm(z2 ~ z3, data=ds, REML=FALSE) 
+M0 #linear model with no random effects
+
+M1<-lmer(z2 ~z3 +(1 | BatName) + (1 | Sex) + (1 | BodyCon) + (1 | Repro), data = ds, REML=TRUE) 
+M1 # Full model with varying intercepts
+
+
+M2 <- lmer(z2 ~z3 +(1 | BatName) + (1 + z3 | Sex) + (1 +z3 |BodyCon) + (1 +z3 | Repro),  data = ds, REML = FALSE) 
+M2 #Full model with varying intercepts and slopes
+
+
+M3 <-lmer(z2 ~z3 +(1 | BatName) + (1 | Sex) + (1  |BodyCon),  data = ds, REML = FALSE) 
+M3 # no repro state, varying intercepts only
+
+M4 <-lmer(z2 ~z3 +(1 | BatName) +  (1  |BodyCon),  data = ds, REML = FALSE)
+M4 # no sex, no repro state, varying intercepts only
+
+M5 <-lmer(z2 ~z3 +(1 | BatName) + (1 | Sex) + (1  |Repro),  data = ds, REML = FALSE)
+M5 # no body condition, varying intercepts only
+
+M6 <- lmer(z2 ~z3 +(1 | BatName) + (1 | Repro),  data = ds, REML = FALSE)
+M6 # repro state only, varying intercepts only
+
+M7 <- lmer(z2 ~z3 +(1 | BatName) + (1 +z3 | Sex),  data = ds, REML = FALSE)
+M7 # Only sex, vaying intercepts and slopes
+
+M8 <-lmer(z2 ~z3 +(1 | BatName) + (1 +z3 | BodyCon),  data = ds, REML = FALSE)
+M8 # Only body condition, varying intercepts and slopes 
+
+M9<-lmer(z2 ~z3 +(1 | BatName) + (1 +z3 | Repro),  data = ds, REML = FALSE)
+M9 # only repro, varying intercepts and slopes
+
+M10 <-lmer(z2 ~z3 +(1 | BatName) + (1 | Sex) + (1 +z3 |BodyCon) + (1 +z3 | Repro),  data = ds, REML = FALSE)
+M10 # full model with varying intercepts and slopes varying by body con and repro
+
+M11 <- lmer(z2 ~z3 +(1 | BatName) + (1 | Sex) + (1 |BodyCon) + (1 +z3 | Repro),  data = ds, REML = FALSE)
+M11 # full model with varying intercepts and slopes varying by reproductive state 
+
+M12 <-lmer(z2 ~z3 +(1 | BatName) + (1 +z3 | Sex) + (1 |BodyCon) + (1 | Repro),  data = ds, REML = FALSE)
+M12 # full model with varying intercept by sex, and no varying slopes 
+
+M13 <-lmer(z2 ~z3 +(1 | BatName) + (1 +z3 | Sex) + (1 +z3 |BodyCon) + (1 | Repro),  data = ds, REML = FALSE)
+M13 # full model with varying intercept by sex, varying slop by body con
+
+
+
+
+
+
+
+# Now I want to compare all the models to eachother to select the one with the highest predictive power 
+
+#AIC is a measure of model quality ...AICc corrects for biases casued by small sample sized 
+# Models with smalles AICc has highest predictive powers 
+
+library(MuMIn)
+MuMIn::AICc(M1)
+
+AIC.table  <- MuMIn::model.sel(M0, M1, M2, M3, M4, M5, M6, M7, M8, M9, M10, M11, M12, M13)
+(AIC.table <- AIC.table[ , c("df", "logLik", "AICc", "delta")]) # Model 4 has smallest AICc
+
+
+# look closer at top two models... M4 and M3 .. .Change REML to = TRUE now 
+
+M3 <-lmer(z2 ~z3 +(1 | BatName) + (1 | Sex) + (1  |BodyCon),  data = ds, REML = TRUE) 
+M3 # no repro state, varying intercepts only
+
+M4 <-lmer(z2 ~z3 +(1 | BatName) +  (1  |BodyCon),  data = ds, REML = TRUE)
+M4 # no sex, no repro state, varying intercepts only
+
+
+MuMIn::model.sel(M3,M4)[ , c("df", "logLik", "AICc", "delta")]
+
+# Sent Logan updated email on progress up to here on 08.31.22
+```
+
+
