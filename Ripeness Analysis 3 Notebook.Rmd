@@ -1,0 +1,200 @@
+---
+title: "Ripeness Analysis 3 Notebook"
+output: html_notebook'
+date: "January 22, 2023"
+author: "BMC"
+---
+
+
+```{r}
+library(ggplot2)
+library(dplyr) 
+library(stats) #Tukey Test
+library(ggsignif)
+library(ggpubr)
+```
+
+
+```{r}
+setwd("C:/Users/15707/Desktop/Research/Panama 2022/Data Analysis/Panama 2022")
+ds<-read.csv("Ripeness DS 1.csv")
+ds
+summary(ds)
+head(ds)
+```
+
+```{r}
+# break up into ripeness categories
+Ripeness <- cut(ds$AvSug, breaks = c(0, 15, 25, 30), labels = c("unripe", "ripe", "over ripe"))
+Ripeness
+
+# Add the new Ripeness column to my original dataset
+ds2 <- cbind(ds, Ripeness)
+ds2
+```
+
+```{r}
+# lets see what kind of graphs I can make 
+plot1 <- ggplot(aes(x=Ripeness, y=TotEat,color=Sex), data =ds2) + geom_boxplot() + scale_color_manual(values=c("F"="navy","M"="orange"))
+plot1
+plot2 <-plot1 + ylab("Total Eaten (g)")
+plot2
+
+# if you want it to be the three Female ones on one side and the three Male ones on the other side, just add + facet_grid(~Sex)
+
+
+plot3<-ggplot(aes(x=AvSug, y=TotEat), data =ds2) + geom_point()
+plot4 <-plot3 + ylab("Total Amount Eaten (g)") + xlab("Average Sugar (%brix)")
+plot4
+
+lm.sug <-lm(TotEat~AvSug, data=ds2)
+summary(lm.sug) # significant ... p<0.05 , R^2 = 0.2
+
+plot5 <- ggplot(aes(x=AvSug, y=TotEat), data =ds) + labs(y="Total Amount Eaten (g)", x="Average Sugar (%brix)") + geom_point() + geom_point(size = 2, alpha = 0.8) + geom_smooth(method = "lm")
+plot5
+
+
+plot6 <- ggplot(aes(x=AvSug, y=TotEat, color=Sex), data =ds2) + geom_point() + geom_point(size = 2, alpha = 0.8) + geom_smooth(method = "lm")
+plot6
+```
+
+```{r}
+#Lets look at the correlation between Average Sugar and Total Eaten
+PearCor1 <- cor.test(ds2$AvSug, ds2$TotEat, method = "pearson")# use Pearson bc we have a linear relationship
+PearCor1
+
+ds2corsubF<-ds2[ds2$Sex == "F",]
+PearCor2F <- cor.test(ds2corsubF$AvSug, ds2corsubF$TotEat, method = "pearson")
+PearCor2F
+
+ds2corsubM<-ds2[ds2$Sex == "M",]
+PearCor2M <- cor.test(ds2corsubM$AvSug, ds2corsubM$TotEat, method = "pearson")
+PearCor2M
+
+
+ds2corsubM2<-ds2[ds2corsubM$Repro == "NR",]
+PearCor2M <- cor.test(ds2corsubM$AvSug, ds2corsubM$TotEat, method = "pearson")
+PearCor2M
+
+```
+
+
+
+```{r}
+# Do a t-test to look at the differences between males and females for the difference ripeness categories
+ds2
+
+ds2_subset <- ds2[ds2$Ripeness == "ripe" & (ds2$Sex == "M" | ds2$Sex == "F"),]
+t.test(TotEat ~ Sex, data = ds2_subset, var.equal = TRUE) # p = 0.297
+
+
+ds2_subset <- ds2[ds2$Ripeness == "unripe" & (ds2$Sex == "M" | ds2$Sex == "F"),]
+t.test(TotEat ~ Sex, data = ds2_subset, var.equal = TRUE) # p = 0.022
+
+
+ds2_subset <- ds2[ds2$Ripeness == "over ripe" & (ds2$Sex == "M" | ds2$Sex == "F"),]
+t.test(TotEat ~ Sex, data = ds2_subset, var.equal = TRUE) # p = 0.513
+
+
+# Doing a Wilcoxon sum rank test becasue I don't know if my data are normally distributed. ...
+ds2_subset <- ds2[ds2$Ripeness == "ripe",]
+wilcox.test(TotEat ~ Sex, data = ds2_subset) # p = 0.280
+
+ds2_subset <- ds2[ds2$Ripeness == "unripe",]
+wilcox.test(TotEat ~ Sex, data = ds2_subset) #p = 0.014
+
+ds2_subset <- ds2[ds2$Ripeness == "over ripe",]
+wilcox.test(TotEat ~ Sex, data = ds2_subset) # p = 0.091
+```
+
+
+```{r}
+# Looking to see if there is significance between the means of the three categories for females
+
+ds2_sub2 <- subset(ds2, Sex == "F") #just for Females
+aov_result <- aov(TotEat ~ Ripeness, data = ds2_sub2)
+summary(aov_result)
+TukeyHSD(aov_result) # ripe - unripe is significant ( p = 0.0383)
+
+
+# Looking to see if there is significance between the means of the three categories for males
+ds2_sub3 <- subset(ds2, Sex == "M") #just for Males
+aov_resultM <- aov(TotEat ~ Ripeness, data = ds2_sub3)
+summary(aov_resultM)
+TukeyHSD(aov_resultM)# ripe-unripe and over ripe-unripe are both significant
+
+
+
+# Looking to see if there is significance between the means BY the three categories for females and males
+ds2_subUn <-subset(ds2,Ripeness == "unripe")
+aov_result <- aov(TotEat ~ Sex, data = ds2_subUn)
+TukeyHSD(aov_result) # p =0.022
+
+ds2_subR <-subset(ds2,Ripeness == "ripe")
+aov_result <- aov(TotEat ~ Sex, data = ds2_subR)
+TukeyHSD(aov_result) # p = 0.297
+
+ds2_subOR <-subset(ds2,Ripeness == "over ripe")
+aov_result <- aov(TotEat ~ Sex, data = ds2_subOR)
+TukeyHSD(aov_result) # p = 0.153
+```
+
+```{r}
+# lets look at different reproductive states
+
+#---------------FEMALES-----------------------
+ds2_female <- filter(ds2, Sex == "F") #filter out data set so I'm just looking at females
+ds2_female
+plot2 <- ggplot(aes(x=Ripeness, y=TotEat, fill=Repro), data =ds2_female) +
+  geom_boxplot()
+plot2
+
+
+
+# -------------- MALES -----------------------
+ds2_male <- filter(ds2, Sex == "M") #filter out data set so I'm just looking at males
+plot3 <- ggplot(aes(x=Ripeness, y=TotEat, fill=Repro), data =ds2_male) +
+  geom_boxplot()
+plot3
+
+levels(ds2_male$Ripeness)
+levels(ds2_male$Repro)
+if (!is.factor(ds2_male$Repro)) ds2_male$Repro <- factor(ds2_male$Repro)
+# perform an ANOVA test
+aov_result <- aov(TotEat ~ Ripeness*Repro, data = ds2_male)
+summary(aov_result)
+
+# Subset the data for Ripeness values and perform t-test for each reproductive state
+overripe_data <- ds2_male[ds2_male$Ripeness == "over ripe",]
+t.test(TotEat ~ Repro, data = overripe_data) # p = 0.216
+
+ripe_data <- ds2_male[ds2_male$Ripeness == "ripe",]
+t.test(TotEat ~ Repro, data = ripe_data) # p= 0.142
+
+unripe_data <- ds2_male[ds2_male$Ripeness == "unripe",]
+t.test(TotEat ~ Repro, data = unripe_data) # p= 0.892
+
+# Merp this seems wonk based on the plots... gonna try to do it again with a Wilcox test
+```
+
+
+```{r}
+
+M1<- lmer(TotEat ~ Ripeness + (Sex) + (InitialW) + (Repro) + (FA) + (Night) + (BodyCon)+ (1 | BatName) ,data = ds2, REML = TRUE) 
+M1
+anova(M1)
+help(lmer)
+summary(M1)$coefficients
+coeffs <-coef(summary(M1))
+p<-pnorm(abs(coeffs[, "t value"]), lower.tail= FALSE *2)
+cbind(coeffs, "p value"=round(p,3))
+
+```
+
+
+```{r}
+ 
+
+
+```
+
